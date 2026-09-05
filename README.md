@@ -12,7 +12,8 @@ bounded, verified wave at a time.
 > **Status:** 1.0 is the runbook as published in the owner's Automation account on 2026-08-24 and exercised
 > against an eight-account fixture; 1.1 is the hardening release produced by an adversarial multi-model
 > review (see [CHANGELOG.md](CHANGELOG.md) and [docs/validation.md](docs/validation.md) for exactly what
-> has and has not been proven live).
+> has and has not been proven live). The 2026-09-05 human walkthrough/helper review was validated offline;
+> it did not repeat the Azure deployment.
 
 ## What smart tier does — and what it costs
 
@@ -63,6 +64,7 @@ infra/test-environment.bicep              Nine-account disposable fixture (optio
 infra/rbac/*.template.json                Discovery reader and remediator custom-role templates
 tests/StaticValidation.ps1                Parser and safety-marker checks
 tests/BehaviorHarness.ps1                 Behavioural harness: real runbook + mocked Az cmdlets (50 scenarios)
+tests/RingRoleHarness.py                  Role-helper regression with mocked Azure CLI
 scripts/publish-runbook.sh                Publish + link runtime + fetch-back hash check (release pipeline safe)
 scripts/ring-role.sh                      Grant / revoke the ring-scoped remediator role
 docs/replicate-in-azure.md                Step-by-step replication with the checkpoint expected at each step
@@ -78,48 +80,29 @@ Raw subscription, tenant, principal and job identifiers and live account names a
 > **Replicating this?** Follow [docs/replicate-in-azure.md](docs/replicate-in-azure.md) end to end and read
 > [docs/gotchas.md](docs/gotchas.md) first. The sections below are the reference behind those two pages.
 
-## Prerequisites
+## Prerequisites and first deployment
 
-- Commercial Azure subscription; permission to create an Automation Account, storage accounts, custom
-  roles and role assignments (custom roles and assignments need Owner or User Access Administrator).
-- Azure CLI with the `automation` extension; Bicep.
-- An Automation **PowerShell 7.4** runtime environment with the **Az** default package (validated with
-  Az 12.3.0). Record the package version you deploy; runtime-environment updates change behaviour for
-  every linked runbook.
+Use **Bash** on Linux, WSL, or Azure Cloud Shell (Bash), with Git, jq, Python 3 and Azure CLI **2.87.0+**,
+the `automation` extension, and Bicep. The guide includes installation checks, login, explicit subscription
+selection, region/name choices and a private evidence directory. Local PowerShell **7.4** is needed only
+for the offline PowerShell tests. Azure uses a PowerShell 7.4 runtime with **Az 12.3.0** pinned; review any
+runtime/package change because it affects every linked runbook.
 
-## Deploy the Automation Account
+Follow [the numbered Azure walkthrough](docs/replicate-in-azure.md#0-tools-source-login-and-scope) from a
+fresh source checkout. It deploys one dedicated Automation Account and nine empty storage accounts, runs
+no-access and read-only checks, enables one named account, verifies the result, and removes writer access.
+The fixture already tags its eligible test targets; you do not need to find or tag a production account.
 
-`infra/automation-account.bicep` creates the account (system-assigned identity, local auth disabled), a
-`PowerShell74-SmartTier` runtime environment with **Az 12.3.0** pinned, and imports the runbook from a release
-tag of this repository, already linked to that runtime and published:
+The source checkout and runbook release are separate pins: `v1.1.0` contains the runbook but predates the
+Automation Account template and helper scripts. Use the full source revision specified by the walkthrough;
+Bicep imports the runbook from its separately pinned release commit. A local edit does not change the
+remote import unless you change `sourceBaseUrl`/`sourceRef` or explicitly publish the local file.
 
-```bash
-az group create --name <automation-rg> --location <region>
-az deployment group create --resource-group <automation-rg> --template-file infra/automation-account.bicep \
-  --parameters automationAccountName=<name> sourceRef=v1.1.0
-```
-
-Automation Accounts are quota-limited per region on small subscriptions; if the deployment fails with
-`Conflict … exceeded your quota for Automation accounts`, pick another region. RBAC is deliberately not in
-the template — see *RBAC model*.
-
-## Deploy the fixture
-
-Create a **new, empty** resource group (the deployment is incremental and would overwrite same-named
-accounts), then deploy:
-
-```bash
-az group create --name <fixture-rg> --location <zrs-region>
-az deployment group create --resource-group <fixture-rg> \
-  --template-file infra/test-environment.bicep \
-  --parameters namePrefix=<3-11 lowercase chars> createLock=false
-```
-
-The fixture creates nine empty accounts: ZRS opted-in, ZRS untagged, ZRS wrong tag value, GZRS Cool
-opted-in, ZRS hierarchical-namespace opted-in, ZRS already Smart, ZRS opted-in "lock" target, LRS opted-in
-(ineligible), Premium block-blob opted-in (ineligible). Pass `createLock=true` (Owner/UAA required) to add a
-`ReadOnly` lock to the lock target and reproduce `409 ScopeLocked` live. Empty accounts cost nothing
-material; delete the resource group when done.
+The human needs Contributor for resource deployment and job operation, plus Owner/User Access Administrator
+for custom roles at their assignable scopes and role assignments at the fixture group. Creating new groups
+or registering providers also needs subscription-level permission, or an administrator must prepare them.
+The walkthrough narrows both custom-role definitions to the fixture group. Using the checked-in reader
+template's subscription-wide assignable scope unchanged requires role-definition permission there.
 
 ## RBAC model
 
@@ -145,23 +128,11 @@ they could not otherwise change.
 
 ## Publish the runbook
 
-```bash
-az automation runbook create  --resource-group <rg> --automation-account-name <account> \
-  --name Enable-AzStorageSmartTier --type PowerShell --location <region>
-az automation runbook replace-content --resource-group <rg> --automation-account-name <account> \
-  --name Enable-AzStorageSmartTier --content @src/Enable-AzStorageSmartTier.ps1
-az automation runbook publish --resource-group <rg> --automation-account-name <account> \
-  --name Enable-AzStorageSmartTier
-sha256sum src/Enable-AzStorageSmartTier.ps1   # record it; the SUMMARY line reports runbookVersion
-```
-
-Link the runbook to your PowerShell 7.4 runtime environment (`PATCH .../runbooks/{name}?api-version=2024-10-23`
-with `{"properties":{"runtimeEnvironment":"<name>"}}`, or the Portal). `scripts/publish-runbook.sh` does all
-of the above in one go and exits non-zero unless the fetch-back SHA-256 equals your local file:
-
-```bash
-SUBSCRIPTION_ID=<sub> RESOURCE_GROUP=<rg> AUTOMATION_ACCOUNT=<account> scripts/publish-runbook.sh
-```
+The Bicep template creates the account, managed identity and runtime and publishes a release runbook.
+For an update, `scripts/publish-runbook.sh` uploads a local file, links the runtime, publishes it and
+compares the CLI fetch-back SHA-256. It requires an **existing** account and runtime. See
+[step 1](docs/replicate-in-azure.md#1-automation-account-powershell-74-runtime-runbook) for the complete
+command, region parameter and source-content checkpoint.
 
 ## Parameters
 
@@ -183,24 +154,16 @@ SUBSCRIPTION_ID=<sub> RESOURCE_GROUP=<rg> AUTOMATION_ACCOUNT=<account> scripts/p
 
 ## Run audit first, then one account
 
-```bash
-az automation runbook start --resource-group <rg> --automation-account-name <account> \
-  --name Enable-AzStorageSmartTier --parameters \
-    Mode=Audit ScopeType=ResourceGroup ResourceGroupName=<fixture-rg> SubscriptionId=<subscription-id>
-```
+Use [steps 3–7](docs/replicate-in-azure.md#3-start-a-job-and-read-its-result) for complete commands that
+capture a job ID, wait, fetch output, check the last `SUMMARY`, verify the before/after account properties,
+and repeat the job to prove idempotence. `az automation runbook start` only queues a job: its successful
+exit does not prove `Completed` or `Remediated`.
 
-Read the JSON lines and the `SUMMARY`. Tag exactly one eligible account `SmartTierManaged=true`, grant the
-remediator role at that resource group, then:
-
-```bash
-... --parameters Mode=Remediate ScopeType=ResourceGroup ResourceGroupName=<fixture-rg> \
-    SubscriptionId=<subscription-id> AccountName=<account> ExpectedChanges=1 MaxChanges=1
-```
-
-Expect one `Remediated` row and `remediated=1`; run it again and expect `AlreadySmart` with `remediated=0`.
-Widen the ring by repeating this per account: the runbook writes one named account per run by design
-(the review's judges rejected count-based fleet writes; see `docs/design-and-limitations.md`).
-No recurring schedule is created by this repository; if you schedule anything, schedule **Audit**.
+Each write requires `Mode=Remediate`, `ScopeType=ResourceGroup`, the explicit subscription/resource group,
+and one `AccountName`; use `ExpectedChanges=1 MaxChanges=1` for the first named write. The fixture's first
+successful write should report `remediated=1`; its repeat should report `AlreadySmart` and `remediated=0`.
+Revoke the writer after testing and verify remaining/inherited access. No recurring schedule is created;
+if you schedule anything, schedule **Audit**.
 
 ## Policy or runbook?
 
@@ -212,22 +175,33 @@ organisation-wide — and never both writers on the same scope.
 
 ## Teardown
 
-```bash
-az role assignment delete --assignee <automation-identity-object-id> --role "Azure Storage Smart Tier Remediator" --scope /subscriptions/<subscription-id>/resourceGroups/<fixture-rg>
-az group delete --name <fixture-rg> --yes --no-wait
-```
-
-Deleting the fixture accounts deletes nothing of value (they hold no data). Reverting a *real* account from
-Smart is a priced migration — see the cost section.
+Follow [step 9](docs/replicate-in-azure.md#9-teardown-the-dedicated-fixture): finish active jobs, remove only
+the fixture lock, verify writer revocation, remove the exact reader assignment and unused definition,
+then delete the dedicated groups and check that both are absent. Stop on any cleanup error. This deletes
+the fixture accounts and Automation Account; use it only for the empty, exclusively owned demo resources.
+Reverting a real account from Smart is a priced migration, not this teardown.
 
 ## Local validation
 
+Run from the repository root. Install PowerShell 7.4 and PSScriptAnalyzer for the PowerShell checks;
+Python 3, jq and Bicep are needed for the remaining checks. Installing the analyzer downloads a package:
+
 ```bash
-pwsh -NoProfile -File tests/StaticValidation.ps1
-pwsh -NoProfile -File tests/BehaviorHarness.ps1
-pwsh -NoProfile -Command "Invoke-ScriptAnalyzer -Path src/Enable-AzStorageSmartTier.ps1 -Severity Error,Warning"
+pwsh -NonInteractive -NoProfile -Command 'Install-Module PSScriptAnalyzer -Scope CurrentUser -Repository PSGallery -Force'
+```
+
+The checks below are offline and use mocked Az cmdlets/CLI; they do not log in, deploy, or start Azure jobs.
+The behavior harness must be noninteractive because it intentionally omits a mandatory parameter once.
+
+```bash
+pwsh -NonInteractive -NoProfile -File tests/StaticValidation.ps1
+pwsh -NonInteractive -NoProfile -File tests/BehaviorHarness.ps1 < /dev/null
+pwsh -NonInteractive -NoProfile -Command '$findings = @(Invoke-ScriptAnalyzer -Path src/Enable-AzStorageSmartTier.ps1 -Severity Error,Warning); $findings; if ($findings.Count) { exit 1 }'
+python3 tests/RingRoleHarness.py
+for script in scripts/*.sh; do bash -n "$script"; done
 jq empty infra/rbac/*.json
 az bicep build --file infra/test-environment.bicep --stdout > /dev/null
+az bicep build --file infra/automation-account.bicep --stdout > /dev/null
 ```
 
 ## Official references
