@@ -53,3 +53,6 @@ jobs:
       - name: Shell scripts parse
         shell: bash
         run: for f in scripts/*.sh; do bash -n "$f"; done
+
+      - name: Ring-role revocation regression (mocked Azure CLI, no Azure access)
+        run: python3 tests/RingRoleHarness.py
