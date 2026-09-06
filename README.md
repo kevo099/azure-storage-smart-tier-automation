@@ -13,7 +13,11 @@ bounded, verified wave at a time.
 > against an eight-account fixture; 1.1 is the hardening release produced by an adversarial multi-model
 > review (see [CHANGELOG.md](CHANGELOG.md) and [docs/validation.md](docs/validation.md) for exactly what
 > has and has not been proven live). The 2026-09-05 human walkthrough/helper review was validated offline;
-> it did not repeat the Azure deployment.
+> it did not repeat the Azure deployment. A [2026-09-06 live walkthrough test](docs/LIVE-TEST-2026-09-06.md)
+> first found and corrected a release-pin error. Its second attempt passed all sixteen expected job outcomes,
+> including guards, three named writes, full property comparisons, repeats, the lock and test-identity RBAC cleanup,
+> with the recorded startup/propagation recoveries. Both test groups, their resources and the temporary operator
+> grant were subsequently removed and verified absent.
 
 ## What smart tier does — and what it costs
 

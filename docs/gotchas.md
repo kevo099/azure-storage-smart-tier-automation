@@ -24,8 +24,9 @@ Read it before the first `Remediate`.
 - `ExpectedChanges=1` against an already-Smart account is a success, not a mismatch (idempotent rerun).
 - `RequireOptInTag=false` is refused unless `AllowUntaggedRemediation=true` is passed as well; the
   exclusion tag still wins.
-- A missing or malformed `SubscriptionId` fails at parameter *binding*, before the script body — that is
-  the only failure that produces no `SUMMARY`.
+- A missing or malformed `SubscriptionId` can fail at parameter *binding*, before the script body, and
+  produces no `SUMMARY`. Runtime or package-startup failures can also prevent the script from emitting
+  one; inspect the job's exception and error streams before assuming which cause applies.
 - There is no conditional PATCH for storage accounts, so a tag removed between the fresh read and the
   write is not detected. Serialise writers; never run this next to an Azure Policy `DeployIfNotExists`
   on the same accounts.
@@ -34,6 +35,11 @@ Read it before the first `Remediate`.
 - The runbook needs a **PowerShell 7.4 runtime environment** with the **Az** default package pinned
   (validated with 12.3.0). A Portal-created runbook may land on the legacy runtime; link it explicitly
   (`scripts/publish-runbook.sh` does) and check the runbook's `runtimeEnvironment` property.
+- A fresh job can remain `Activating` beyond the walkthrough's ten-minute polling budget, without a
+  start time or exception. That timeout is a local investigation checkpoint: Microsoft documents a
+  30-minute start SLA for 99.9% of runbooks. Keep observing the same job ID; calling `run_job` again submits
+  a duplicate. Preserve both the timeout and eventual result, and leave the no-reader identity unchanged
+  while that baseline job is pending. See [execution start-time troubleshooting](https://learn.microsoft.com/troubleshoot/azure/automation/runbooks/job-not-start-as-expected).
 - Azure Automation does not support `#requires`; the runbook uses an explicit PowerShell 7 guard instead.
 - Job streams are capped at 1 MiB per job (about 200 KB in the Portal view). Audit large subscriptions per
   resource group or ship job streams to Log Analytics.
@@ -52,11 +58,28 @@ Read it before the first `Remediate`.
   Administrator grant failed with `AuthorizationFailed … refresh your credentials` until the CLI token
   rolled over, although the assignment was correct. Wait, or refresh the login, before concluding the
   grant is wrong. The runbook side is safe either way: its writes are simply refused (`Forbidden`).
+- A role-definition create can succeed while its immediate scoped list returns empty. The writer helper
+  then stops before assignment with `Created role is not readable yet`. Preserve the failure and recover
+  the created GUID by checking the exact template, sole assignable scope, creator and creation time.
+  Require stable exact-GUID readback, then retry only assignment creation with that saved ID; an absent
+  name-list result is not evidence that a new definition is needed. See the
+  [recorded recovery](LIVE-TEST-2026-09-06.md#writer-definition-propagation-recovery).
+- After successful role/assignment DELETEs, role-name lists can disagree with exact-GUID GETs or show a
+  deleted definition again after earlier empty reads. Preserve the strict failure, continue read-only
+  observation until repeated checks agree, and keep deletion evidence separate from visibility checks.
+  Never recreate/regrant a role to resolve cleanup, and never treat permission/network failures as proof
+  of absence. See the [cleanup record](LIVE-TEST-2026-09-06.md#test-rbac-cleanup-and-final-inventory).
 - Creating a custom role definition needs `Microsoft.Authorization/roleDefinitions/write` on every
   assignable scope — User Access Administrator at the ring resource group is enough when the role's
   assignable scope is that resource group.
 
 ## Reusing or modifying the code
+- An annotated release tag has its own Git object ID. Git commands can silently peel that object to
+  read a file, while a GitHub raw-content URL containing the tag-object SHA returns 404. Use
+  `git rev-parse 'v1.1.0^{commit}'` for the commit pin and check `git cat-file -t` reports `commit` before
+  passing it as Bicep `sourceRef`. An invalid raw URL fails Azure deployment with `Validation errors
+  while reading content link`; inspect the partially created account/runtime before retrying only the
+  Automation deployment. Do not rerun a storage fixture whose accounts have already been remediated.
 - Run the harness **non-interactively**: `pwsh -NonInteractive -NoProfile -File tests/BehaviorHarness.ps1`
   (CI also closes stdin). One scenario omits the mandatory `SubscriptionId` on purpose; an interactive host
   prompts for it forever.

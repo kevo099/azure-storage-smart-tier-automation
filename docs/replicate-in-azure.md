@@ -51,8 +51,12 @@ GUIDE_COPY=$(mktemp "${TMPDIR:-/tmp}/smart-tier-walkthrough.XXXXXX")
 cp docs/replicate-in-azure.md "$GUIDE_COPY"
 printf 'Keep this current walkthrough open: %s\n' "$GUIDE_COPY"
 git checkout --detach "$SOURCE_COMMIT"
-RUNBOOK_REF='96d05e0c6eaf2891eef0d6773200e3a4a247514e'
+RUNBOOK_REF='33240e356653dad6c814a9fe6403d8e324b742af'
+EXPECTED_RUNBOOK_SHA='ba11f6413b7b5ee1d1d12acee6a7b7fe8cf013efd7602e4e1802998effa872e8'
 git rev-parse HEAD
+test "$(git cat-file -t "$SOURCE_COMMIT")" = commit
+test "$(git cat-file -t "$RUNBOOK_REF")" = commit
+test "$(git show "$RUNBOOK_REF:src/Enable-AzStorageSmartTier.ps1" | sha256sum | cut -d' ' -f1)" = "$EXPECTED_RUNBOOK_SHA"
 git diff --exit-code "$RUNBOOK_REF" -- src/Enable-AzStorageSmartTier.ps1
 ```
 
@@ -60,6 +64,12 @@ git diff --exit-code "$RUNBOOK_REF" -- src/Enable-AzStorageSmartTier.ps1
 the saved `GUIDE_COPY` (or this guide in your browser) open: the pinned source includes the executable
 files, while this walkthrough is newer. A fork must override Bicep's `sourceBaseUrl`; editing a local runbook does not change what the
 default remote import deploys.
+
+Use the **commit pointed to by the release tag** for `RUNBOOK_REF`. For an annotated tag, `git rev-parse
+v1.1.0` returns a tag-object ID; `git rev-parse 'v1.1.0^{commit}'` returns the commit needed by GitHub's raw
+content URL. The live test found that using the tag-object ID `96d05e0…` passed local `git show` checks but
+returned HTTP 404 from the raw URL and failed Azure's content-link validation. The checks above require
+commit objects and the qualified runbook hash before deployment; the corrected pin keeps the same bytes.
 
 Set the values below. Replace the subscription placeholder with your subscription ID and choose unused
 resource-group names. Use 3–11 lowercase letters/digits for `PREFIX`; the nine resulting storage-account
@@ -87,7 +97,7 @@ EVIDENCE_DIR=$(mktemp -d "$PWD/.generated/smart-tier-evidence.XXXXXX")
 chmod 700 "$EVIDENCE_DIR"
 printf 'Private evidence directory: %s\n' "$EVIDENCE_DIR"
 declare -p SUB AA_RG AA FIXTURE_RG REGION AA_REGION PREFIX ARM READER_ROLE WRITER_ROLE \
-  SCOPE TARGET UNTAGGED LOCK_TARGET EVIDENCE_DIR RUNBOOK_REF SOURCE_COMMIT > "$EVIDENCE_DIR/session.env"
+  SCOPE TARGET UNTAGGED LOCK_TARGET EVIDENCE_DIR RUNBOOK_REF EXPECTED_RUNBOOK_SHA SOURCE_COMMIT > "$EVIDENCE_DIR/session.env"
 
 az login  # Cloud Shell is normally already signed in; use az login --tenant TENANT_ID if needed
 az account set --subscription "$SUB"
@@ -217,6 +227,7 @@ run_job() {
     --parameters "$@" --query name -o tsv) || return 1
   [[ "$JOB_ID" =~ ^[0-9a-fA-F-]{36}$ ]] || { echo 'STOP: no job GUID returned' >&2; return 1; }
   printf 'Job: %s\n' "$JOB_ID"
+  declare -p JOB_ID >> "$EVIDENCE_DIR/session.env"
   local attempt status
   for ((attempt=0; attempt<60; attempt++)); do
     az rest --method get --url "$BASE/jobs/$JOB_ID?api-version=2024-10-23" \
@@ -232,6 +243,8 @@ run_job() {
     esac
     sleep 10
   done
+  cp "$EVIDENCE_DIR/$JOB_ID.json" "$EVIDENCE_DIR/$JOB_ID-timeout.json" || return 1
+  date -u +'%Y-%m-%dT%H:%M:%S.%NZ' > "$EVIDENCE_DIR/$JOB_ID-timeout-observed.txt" || return 1
   echo "STOP: job $JOB_ID is still $status; inspect it before starting another job." >&2
   return 1
 }
@@ -245,6 +258,28 @@ run_job Mode=Audit ScopeType=ResourceGroup ResourceGroupName="$FIXTURE_RG" Subsc
 unrelated role already makes the subscription visible, a missing target permission instead gives a GET
 `403 AuthorizationFailed`. If the job succeeds already, stop and inspect existing/inherited permissions;
 you have not demonstrated the no-access baseline.
+
+The helper's ten-minute polling budget is an investigation checkpoint. Microsoft documents that 99.9%
+of runbooks should start within 30 minutes of their planned start time; a local timeout alone does not
+prove the runbook failed. The helper preserves `JOB_ID-timeout.json` and its observation timestamp before
+subsequent reads update the current metadata file. See [execution start-time troubleshooting](https://learn.microsoft.com/troubleshoot/azure/automation/runbooks/job-not-start-as-expected).
+Do not call `run_job` again to wait: it submits another job. The helper now saves the latest `JOB_ID` in
+`session.env`; if the shell closed, recover that session first. Inspect the same job with read-only calls:
+
+```bash
+az rest --method get --url "$BASE/jobs/$JOB_ID?api-version=2024-10-23" \
+  -o json > "$EVIDENCE_DIR/$JOB_ID.json"
+jq '.properties | {status, creationTime, startTime, endTime, exception}' "$EVIDENCE_DIR/$JOB_ID.json"
+az rest --method get --url "$BASE/jobs/$JOB_ID/output?api-version=2024-10-23" \
+  -o tsv > "$EVIDENCE_DIR/$JOB_ID-output.txt"
+cat "$EVIDENCE_DIR/$JOB_ID-output.txt"
+```
+
+Repeat only those GETs while investigating the existing job. Retain the local timeout and its eventual
+terminal result separately. Wait for the no-reader job to finish before adding its reader role; changing
+permissions while it is pending invalidates that baseline. If a job still has not started after the
+30-minute service window, investigate the platform/job details before submitting another job or changing
+its runtime.
 
 In the Portal the same result is under Automation Account → Jobs → the job ID → Output / Errors / All Logs.
 If no `SUMMARY` exists, inspect Errors and the job's `exception` in the saved metadata; parameter binding,
@@ -327,13 +362,90 @@ The Owner/User Access Administrator grants the temporary writer at the fixture g
 **all storage-account updates**, not just `accessTier`; Azure has no field-level action for this property.
 Keep the Automation Account dedicated and run only one job at a time.
 
+Record the deployment operator's confirmed object ID, which differs from the Automation identity in
+`PRINCIPAL`. For an interactive human login,
+[`az ad signed-in-user show`](https://learn.microsoft.com/cli/azure/ad/signed-in-user#az-ad-signed-in-user-show)
+provides it:
+
 ```bash
-scripts/ring-role.sh grant "$SUB" "$FIXTURE_RG" "$PRINCIPAL"
+DEPLOYER_OBJECT_ID=$(az ad signed-in-user show --query id -o tsv)
+test -n "$DEPLOYER_OBJECT_ID"
+declare -p DEPLOYER_OBJECT_ID >> "$EVIDENCE_DIR/session.env"
+```
+
+A service-principal or managed-identity operator should set `DEPLOYER_OBJECT_ID` to its already verified
+principal object ID instead of running the interactive-user lookup. Stop if the operator's identity is
+uncertain. Save the grant invocation's time window, complete output and exit code even if the helper fails:
+
+```bash
+WRITER_GRANT_STARTED_UTC=$(date -u +'%Y-%m-%dT%H:%M:%S.%NZ')
+declare -p WRITER_GRANT_STARTED_UTC >> "$EVIDENCE_DIR/session.env"
+if scripts/ring-role.sh grant "$SUB" "$FIXTURE_RG" "$PRINCIPAL" > "$EVIDENCE_DIR/writer-grant.log" 2>&1; then
+  WRITER_GRANT_EXIT=0
+else
+  WRITER_GRANT_EXIT=$?
+fi
+WRITER_GRANT_FINISHED_UTC=$(date -u +'%Y-%m-%dT%H:%M:%S.%NZ')
+declare -p WRITER_GRANT_FINISHED_UTC WRITER_GRANT_EXIT >> "$EVIDENCE_DIR/session.env"
+cat "$EVIDENCE_DIR/writer-grant.log"
+test "$WRITER_GRANT_EXIT" -eq 0
 az storage account show --name "$TARGET" --resource-group "$FIXTURE_RG" \
   -o json > "$EVIDENCE_DIR/before.json"
 run_job Mode=Remediate ScopeType=ResourceGroup ResourceGroupName="$FIXTURE_RG" SubscriptionId="$SUB" \
   AccountName="$TARGET" ExpectedChanges=1 MaxChanges=1
 ```
+
+If the helper stops with `Created role is not readable yet`, its definition creation already succeeded.
+The final exit-code check closes this dedicated shell on failure; recover `session.env` using the recovery
+section before running the commands below. Retain `writer-grant.log` and its saved time window.
+Do not repeatedly invoke the whole grant after a missing list result: role reads can lag or alternate during
+propagation. Inspect and save the definition once it becomes visible:
+
+```bash
+az role definition list --subscription "$SUB" --scope "$SCOPE" --name "$WRITER_ROLE" \
+  --custom-role-only true -o json > "$EVIDENCE_DIR/writer-role-readback.json"
+jq '.[] | {id, roleName, assignableScopes, permissions, description, createdBy, createdOn, updatedBy, updatedOn}' \
+  "$EVIDENCE_DIR/writer-role-readback.json"
+```
+
+Verify that exactly one returned definition matches the checked-in
+[writer permission/description template](../infra/rbac/storage-remediator-role.template.json), has **only**
+`$SCOPE` as its assignable scope, has `createdBy`/`updatedBy` equal to `$DEPLOYER_OBJECT_ID`,
+and has `createdOn`/`updatedOn` inside `$WRITER_GRANT_STARTED_UTC`–`$WRITER_GRANT_FINISHED_UTC`. Preserve its exact ID. Stop if any ownership field
+is uncertain; a matching display name alone is insufficient. The [live-test recovery](LIVE-TEST-2026-09-06.md#writer-definition-propagation-recovery)
+required three stable exact-ID reads before retrying only the assignment command below:
+
+```bash
+WRITER_ROLE_ID='PASTE_THE_VERIFIED_ROLE_DEFINITION_ID'
+declare -p WRITER_ROLE_ID >> "$EVIDENCE_DIR/session.env"
+for attempt in 1 2 3; do
+  az rest --method get --url "$ARM$WRITER_ROLE_ID?api-version=2022-04-01" \
+    -o json > "$EVIDENCE_DIR/writer-role-guid-$attempt.json"
+  jq '.properties | {roleName, assignableScopes, permissions, description, createdBy, createdOn, updatedBy, updatedOn}' \
+    "$EVIDENCE_DIR/writer-role-guid-$attempt.json"
+  if [ "$attempt" -lt 3 ]; then sleep 10; fi
+done
+diff <(jq -S . "$EVIDENCE_DIR/writer-role-guid-1.json") <(jq -S . "$EVIDENCE_DIR/writer-role-guid-2.json")
+diff <(jq -S . "$EVIDENCE_DIR/writer-role-guid-1.json") <(jq -S . "$EVIDENCE_DIR/writer-role-guid-3.json")
+```
+
+**Checkpoint** — all three exact-ID reads succeeded, both diffs are empty, and the fields match the
+verified template, scope and creation event. Stop on a missing or changed read; do not recreate the role.
+See Microsoft's [Role Definitions — Get](https://learn.microsoft.com/rest/api/authorization/role-definitions/get?view=rest-authorization-2022-04-01).
+Then retry only the existing definition's assignment:
+
+```bash
+WRITER_ASSIGNMENT_ID=$(az role assignment create --subscription "$SUB" --assignee-object-id "$PRINCIPAL" \
+  --assignee-principal-type ServicePrincipal --role "$WRITER_ROLE_ID" --scope "$SCOPE" \
+  --query id -o tsv)
+test -n "$WRITER_ASSIGNMENT_ID"
+declare -p WRITER_ASSIGNMENT_ID >> "$EVIDENCE_DIR/session.env"
+```
+
+This recovery creates no new definition. Verify the identity's exact writer assignment and unchanged
+account tier, then continue with the `before.json` capture and named-target `run_job` command from the
+original block; do not repeat its helper invocation. Keep the initial helper failure in the evidence;
+a successful direct assignment is an explicit recovery, not a successful initial helper invocation.
 
 **Checkpoint** — job `Completed`; `WouldRemediate` → `INTENT` → `Remediated` (`Hot→Smart`, stage `Verify`);
 last `SUMMARY` has `remediated=1`, `patchesSubmitted=1`. A `Forbidden` result can mean propagation lag or a
@@ -461,6 +573,14 @@ az role definition list --scope "$SCOPE" --name "$READER_ROLE" --custom-role-onl
 role list is `[]`. Stop if another principal now uses the reader definition; resolve that reuse before
 continuing. The stored IDs identify only the objects created by this walkthrough.
 
+A successful DELETE can precede consistent readback. The live test retained a strict post-delete failure
+and later observed a stale writer name-list even while that role's exact-ID GET returned NotFound. Preserve
+those results and continue only read-only observation of the saved role/assignment IDs and lists until
+repeated checks agree on absence. Do not recreate or regrant a deleted role to recover cleanup, and do not
+count authorization or transport errors as NotFound. The
+[cleanup record](LIVE-TEST-2026-09-06.md#test-rbac-cleanup-and-final-inventory) shows the separate deletion and
+read-convergence evidence.
+
 ```bash
 az group delete --name "$FIXTURE_RG" --yes
 az group delete --name "$AA_RG" --yes
@@ -478,4 +598,9 @@ Leaving Smart on a real account is a priced migration; this fixture teardown is 
 named writes, property comparison, GZRS/HNS, idempotence and the live lock. Matching the basic walkthrough
 proves the main ring-of-one path; optional cases need their own results before claiming full reproduction.
 The 2026-09-05 documentation/helper review used offline validation and mocked Azure CLI regression tests.
-It did not redeploy Azure or requalify these revised instructions in a fresh subscription.
+It did not redeploy Azure. The [2026-09-06 live walkthrough test](LIVE-TEST-2026-09-06.md) subsequently found
+and corrected the annotated-tag pin error. Its second attempt passed all sixteen expected job outcomes,
+including the additional GZRS/HNS cases, full property comparisons, repeats, lock and test-identity RBAC
+cleanup. A delayed first job, writer-definition propagation and post-delete visibility required the explicit
+recoveries recorded there; the initial writer-helper grant did not pass unchanged. Both dedicated groups,
+their resources and the temporary operator grant were subsequently removed and verified absent.
