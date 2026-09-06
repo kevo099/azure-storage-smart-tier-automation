@@ -78,5 +78,11 @@ Read it before the first `Remediate`.
 - A managed identity with **no** role assignment anywhere in the subscription fails at `Set-AzContext`
   ("Please provide a valid tenant or a valid subscription") — before any ARM call. Any assignment inside
   the subscription makes it visible; the reader role at the fixture RG is enough.
-- The fixture's `createLock=true` and the ring-of-one both need Owner/User Access Administrator help;
-  everything else works with Contributor.
+- Custom-role creation and role-assignment cleanup also need Owner/User Access Administrator at the
+  relevant scopes. The reader template defaults to subscription assignability; the walkthrough renders
+  it to the fixture group. Contributor can deploy resources, but cannot perform these RBAC steps.
+- `ring-role.sh revoke` must finish successfully and its access checks must show no remaining writer.
+  Read/delete errors now stop the helper; a shared or differently scoped definition is retained for its
+  owner to review. This verifies that custom role only, so inspect other/inherited grants separately.
+- CLI commands cannot combine `az role assignment list --all` with `--scope`. For custom-role deletion,
+  `az role definition delete --name` takes a role name or GUID, not the full ARM resource ID.
