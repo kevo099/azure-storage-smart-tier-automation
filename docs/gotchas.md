@@ -57,6 +57,12 @@ Read it before the first `Remediate`.
   assignable scope is that resource group.
 
 ## Reusing or modifying the code
+- An annotated release tag has its own Git object ID. Git commands can silently peel that object to
+  read a file, while a GitHub raw-content URL containing the tag-object SHA returns 404. Use
+  `git rev-parse 'v1.1.0^{commit}'` for the commit pin and check `git cat-file -t` reports `commit` before
+  passing it as Bicep `sourceRef`. An invalid raw URL fails Azure deployment with `Validation errors
+  while reading content link`; inspect the partially created account/runtime before retrying only the
+  Automation deployment. Do not rerun a storage fixture whose accounts have already been remediated.
 - Run the harness **non-interactively**: `pwsh -NonInteractive -NoProfile -File tests/BehaviorHarness.ps1`
   (CI also closes stdin). One scenario omits the mandatory `SubscriptionId` on purpose; an interactive host
   prompts for it forever.

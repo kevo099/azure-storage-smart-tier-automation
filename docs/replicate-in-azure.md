@@ -51,8 +51,12 @@ GUIDE_COPY=$(mktemp "${TMPDIR:-/tmp}/smart-tier-walkthrough.XXXXXX")
 cp docs/replicate-in-azure.md "$GUIDE_COPY"
 printf 'Keep this current walkthrough open: %s\n' "$GUIDE_COPY"
 git checkout --detach "$SOURCE_COMMIT"
-RUNBOOK_REF='96d05e0c6eaf2891eef0d6773200e3a4a247514e'
+RUNBOOK_REF='33240e356653dad6c814a9fe6403d8e324b742af'
+EXPECTED_RUNBOOK_SHA='ba11f6413b7b5ee1d1d12acee6a7b7fe8cf013efd7602e4e1802998effa872e8'
 git rev-parse HEAD
+test "$(git cat-file -t "$SOURCE_COMMIT")" = commit
+test "$(git cat-file -t "$RUNBOOK_REF")" = commit
+test "$(git show "$RUNBOOK_REF:src/Enable-AzStorageSmartTier.ps1" | sha256sum | cut -d' ' -f1)" = "$EXPECTED_RUNBOOK_SHA"
 git diff --exit-code "$RUNBOOK_REF" -- src/Enable-AzStorageSmartTier.ps1
 ```
 
@@ -60,6 +64,12 @@ git diff --exit-code "$RUNBOOK_REF" -- src/Enable-AzStorageSmartTier.ps1
 the saved `GUIDE_COPY` (or this guide in your browser) open: the pinned source includes the executable
 files, while this walkthrough is newer. A fork must override Bicep's `sourceBaseUrl`; editing a local runbook does not change what the
 default remote import deploys.
+
+Use the **commit pointed to by the release tag** for `RUNBOOK_REF`. For an annotated tag, `git rev-parse
+v1.1.0` returns a tag-object ID; `git rev-parse 'v1.1.0^{commit}'` returns the commit needed by GitHub's raw
+content URL. The live test found that using the tag-object ID `96d05e0…` passed local `git show` checks but
+returned HTTP 404 from the raw URL and failed Azure's content-link validation. The checks above require
+commit objects and the qualified runbook hash before deployment; the corrected pin keeps the same bytes.
 
 Set the values below. Replace the subscription placeholder with your subscription ID and choose unused
 resource-group names. Use 3–11 lowercase letters/digits for `PREFIX`; the nine resulting storage-account
@@ -87,7 +97,7 @@ EVIDENCE_DIR=$(mktemp -d "$PWD/.generated/smart-tier-evidence.XXXXXX")
 chmod 700 "$EVIDENCE_DIR"
 printf 'Private evidence directory: %s\n' "$EVIDENCE_DIR"
 declare -p SUB AA_RG AA FIXTURE_RG REGION AA_REGION PREFIX ARM READER_ROLE WRITER_ROLE \
-  SCOPE TARGET UNTAGGED LOCK_TARGET EVIDENCE_DIR RUNBOOK_REF SOURCE_COMMIT > "$EVIDENCE_DIR/session.env"
+  SCOPE TARGET UNTAGGED LOCK_TARGET EVIDENCE_DIR RUNBOOK_REF EXPECTED_RUNBOOK_SHA SOURCE_COMMIT > "$EVIDENCE_DIR/session.env"
 
 az login  # Cloud Shell is normally already signed in; use az login --tenant TENANT_ID if needed
 az account set --subscription "$SUB"
@@ -478,4 +488,6 @@ Leaving Smart on a real account is a priced migration; this fixture teardown is 
 named writes, property comparison, GZRS/HNS, idempotence and the live lock. Matching the basic walkthrough
 proves the main ring-of-one path; optional cases need their own results before claiming full reproduction.
 The 2026-09-05 documentation/helper review used offline validation and mocked Azure CLI regression tests.
-It did not redeploy Azure or requalify these revised instructions in a fresh subscription.
+It did not redeploy Azure. The [2026-09-06 live walkthrough test](LIVE-TEST-2026-09-06.md) subsequently found
+and corrected the annotated-tag pin error, then passed deployment, publication and the no-reader audit.
+RBAC-dependent discovery, guards, named writes, lock, revocation and teardown remain pending for that run.
