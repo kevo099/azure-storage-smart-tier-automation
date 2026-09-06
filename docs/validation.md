@@ -3,8 +3,11 @@
 Identifiers (subscription, tenant, principal, job) and live account names are omitted.
 
 The [2026-09-06 walkthrough test](LIVE-TEST-2026-09-06.md) records a corrected release-pin import, successful
-fixture/publication/no-reader checks, and explicitly pending RBAC-dependent scenarios. It is a partial
-new run, separate from the historical full runbook qualification below.
+fixture/publication/no-reader checks, and verified deletion of the test Automation Account and all nine
+Storage accounts. Both resource-group shells remain empty with their original tags unchanged; no active
+test resources remain inside them. RBAC-dependent scenarios and the custom-role/assignment deletion
+lifecycle remain untested in this run because no roles or assignments were created. This partial run is
+separate from the historical full runbook qualification below.
 
 ## 1.0 — as published (2026-08-24)
 

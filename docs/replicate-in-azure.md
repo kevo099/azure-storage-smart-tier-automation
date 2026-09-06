@@ -490,4 +490,6 @@ proves the main ring-of-one path; optional cases need their own results before c
 The 2026-09-05 documentation/helper review used offline validation and mocked Azure CLI regression tests.
 It did not redeploy Azure. The [2026-09-06 live walkthrough test](LIVE-TEST-2026-09-06.md) subsequently found
 and corrected the annotated-tag pin error, then passed deployment, publication and the no-reader audit.
-RBAC-dependent discovery, guards, named writes, lock, revocation and teardown remain pending for that run.
+The test Automation Account and nine Storage accounts were subsequently deleted, with both empty
+resource-group shells retained. RBAC-dependent discovery, guards, named writes, lock, revocation and the
+custom-role/assignment deletion lifecycle remain untested in that run; no roles or assignments were created.

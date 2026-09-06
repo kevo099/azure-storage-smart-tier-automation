@@ -14,7 +14,8 @@ bounded, verified wave at a time.
 > review (see [CHANGELOG.md](CHANGELOG.md) and [docs/validation.md](docs/validation.md) for exactly what
 > has and has not been proven live). The 2026-09-05 human walkthrough/helper review was validated offline;
 > it did not repeat the Azure deployment. A [2026-09-06 live walkthrough test](docs/LIVE-TEST-2026-09-06.md)
-> then passed corrected deployment, publication and the no-reader audit; RBAC-dependent scenarios remain pending.
+> then passed corrected deployment, publication and the no-reader audit. Its test Automation Account and nine
+> Storage accounts were deleted, leaving two empty resource-group shells; RBAC-dependent scenarios remain pending.
 
 ## What smart tier does — and what it costs
 
