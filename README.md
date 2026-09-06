@@ -16,7 +16,8 @@ bounded, verified wave at a time.
 > it did not repeat the Azure deployment. A [2026-09-06 live walkthrough test](docs/LIVE-TEST-2026-09-06.md)
 > first found and corrected a release-pin error. Its second attempt passed all sixteen expected job outcomes,
 > including guards, three named writes, full property comparisons, repeats, the lock and test-identity RBAC cleanup,
-> with the recorded startup/propagation recoveries. Final account/group and temporary operator-grant teardown is pending.
+> with the recorded startup/propagation recoveries. Both test groups, their resources and the temporary operator
+> grant were subsequently removed and verified absent.
 
 ## What smart tier does — and what it costs
 

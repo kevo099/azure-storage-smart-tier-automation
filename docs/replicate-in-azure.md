@@ -602,5 +602,5 @@ It did not redeploy Azure. The [2026-09-06 live walkthrough test](LIVE-TEST-2026
 and corrected the annotated-tag pin error. Its second attempt passed all sixteen expected job outcomes,
 including the additional GZRS/HNS cases, full property comparisons, repeats, lock and test-identity RBAC
 cleanup. A delayed first job, writer-definition propagation and post-delete visibility required the explicit
-recoveries recorded there; the initial writer-helper grant did not pass unchanged. Final account/group and
-temporary operator-grant teardown remains pending in that record.
+recoveries recorded there; the initial writer-helper grant did not pass unchanged. Both dedicated groups,
+their resources and the temporary operator grant were subsequently removed and verified absent.
