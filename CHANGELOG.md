@@ -1,6 +1,21 @@
 # Changelog
 
-## 1.1.0 — 2026-08-25 (unreleased; branch `v1.1/tribunal-hardening`)
+## Unreleased
+
+Runbook bytes are unchanged (`src/Enable-AzStorageSmartTier.ps1`, SHA-256 `ba11f641…`, `runbookVersion` 1.1.0).
+
+- **Publisher.** `scripts/publish-runbook.sh` now uploads the runbook as raw bytes and verifies the draft and the
+  published content byte-for-byte, matching the Azure Backup automation repository. The previous helper used
+  `--content @file`, which Azure CLI 2.90+ expands without the final newline, and compared a `-o tsv` read that
+  restores one, so it could report a match while the published runbook was one byte short (observed live on
+  2026-10-19). It also discovers the Automation Account region instead of defaulting to `eastus2`.
+- **Tests.** `tests/test_publish_runbook.py` (mocked Azure CLI) covers byte preservation and the upload gates; CI runs it.
+- **Evidence.** [LIVE-TEST-2026-10-19](docs/LIVE-TEST-2026-10-19.md): the full walkthrough in a second tenant.
+
+Earlier changes on `main` after the v1.1.0 tag: the Automation Account Bicep, publish and ring-role helpers,
+the step-by-step walkthrough, the verified writer revocation fix and the 2026-09-06 live records.
+
+## 1.1.0 — 2026-08-25
 
 Hardening release driven by an adversarial multi-model review of 1.0 (seven GPT-5.6 review lenses, a
 Claude cross-check, an executed offline harness, four-side cross-examination and two judges — all with

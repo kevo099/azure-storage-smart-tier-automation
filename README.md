@@ -9,6 +9,9 @@ bounded, verified wave at a time.
 > ([azure-backup-smart-tiering-automation](https://github.com/kevo099/azure-backup-smart-tiering-automation)).
 > This runbook changes exactly one thing: a storage account's default blob access tier.
 
+> **Part of an Azure governance suite.** The [suite overview](https://github.com/kevo099/azure-enterprise-policy-baseline/blob/main/docs/SUITE.md)
+> lists every component, which tool to use when, and the live-test evidence.
+
 > **Status:** 1.0 is the runbook as published in the owner's Automation account on 2026-08-24 and exercised
 > against an eight-account fixture; 1.1 is the hardening release produced by an adversarial multi-model
 > review (see [CHANGELOG.md](CHANGELOG.md) and [docs/validation.md](docs/validation.md) for exactly what
@@ -17,7 +20,9 @@ bounded, verified wave at a time.
 > first found and corrected a release-pin error. Its second attempt passed all sixteen expected job outcomes,
 > including guards, three named writes, full property comparisons, repeats, the lock and test-identity RBAC cleanup,
 > with the recorded startup/propagation recoveries. Both test groups, their resources and the temporary operator
-> grant were subsequently removed and verified absent.
+> grant were subsequently removed and verified absent. A [2026-10-19 walkthrough in a second tenant](docs/LIVE-TEST-2026-10-19.md)
+> passed every checkpoint on Azure CLI 2.91 without recoveries and found that the old publisher's byte check could
+> pass while the published runbook was one byte short; the publisher now uploads and verifies raw bytes.
 
 ## What smart tier does — and what it costs
 

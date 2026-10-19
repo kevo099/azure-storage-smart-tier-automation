@@ -2,12 +2,19 @@
 
 Identifiers (subscription, tenant, principal, job) and live account names are omitted.
 
-The [2026-09-06 walkthrough test](LIVE-TEST-2026-09-06.md) records a corrected release-pin import, successful
-fixture/publication/no-reader checks, and verified deletion of the test Automation Account and all nine
-Storage accounts. Both resource-group shells remain empty with their original tags unchanged; no active
-test resources remain inside them. RBAC-dependent scenarios and the custom-role/assignment deletion
-lifecycle remain untested in this run because no roles or assignments were created. This partial run is
-separate from the historical full runbook qualification below.
+Current status, newest first:
+
+- **2026-10-19, second tenant:** the full [walkthrough](replicate-in-azure.md) passed every checkpoint on Azure
+  CLI 2.91 without recoveries: no-reader baseline, nine-account audit, five guards, the reader-only denied write,
+  three named writes with empty non-tier property diffs and idempotent repeats, the live `ReadOnly` lock, writer
+  revocation and the final audit. It also showed that the old publisher's byte check could pass while the
+  published runbook was one byte short; the publisher now uploads and verifies raw bytes. See
+  [LIVE-TEST-2026-10-19](LIVE-TEST-2026-10-19.md).
+- **2026-09-06:** the [walkthrough test](LIVE-TEST-2026-09-06.md) first found and corrected an annotated-tag
+  release pin. Its second attempt passed all sixteen expected job outcomes, including RBAC grant and revocation,
+  with the recorded startup and propagation recoveries; every test resource and grant was removed afterwards.
+
+The historical runbook qualification follows.
 
 ## 1.0 — as published (2026-08-24)
 
