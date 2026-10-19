@@ -186,8 +186,9 @@ PY
 ```
 
 For a local change or byte-exact CLI fetch-back comparison, use the publisher **after** the Automation
-Account, its identity, and this runtime exist. It does not provision them. `LOCATION` must be the Automation
-Account's region; its default is `eastus2`.
+Account, its identity, and this runtime exist. It does not provision them. It uploads the file as raw bytes
+(Azure CLI's `--content @file` expansion drops the final newline) and verifies both the draft and the
+published content byte-for-byte. It discovers the Automation Account's region unless `LOCATION` is set.
 
 ```bash
 SUBSCRIPTION_ID="$SUB" RESOURCE_GROUP="$AA_RG" AUTOMATION_ACCOUNT="$AA" LOCATION="$AA_REGION" \

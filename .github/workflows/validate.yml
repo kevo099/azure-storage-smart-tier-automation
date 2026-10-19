@@ -56,3 +56,6 @@ jobs:
 
       - name: Ring-role revocation regression (mocked Azure CLI, no Azure access)
         run: python3 tests/RingRoleHarness.py
+
+      - name: Publisher byte preservation and upload gates (mocked Azure CLI, no Azure access)
+        run: python3 -m unittest tests/test_publish_runbook.py
