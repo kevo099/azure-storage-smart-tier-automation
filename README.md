@@ -28,7 +28,7 @@ bounded, verified wave at a time.
 
 Smart tier is an account-level default: block blobs land in **hot**, move to **cool** after 30 days without
 access and to **cold** after 60 more, and return to hot when accessed. Azure manages the moves; there are no
-transition, early-deletion or retrieval charges inside smart tier. Two things an approver must know:
+transition, early-deletion or retrieval charges inside smart tier. Three things an approver must know:
 
 - **Monitoring fee.** Azure charges a monthly monitoring fee per 10,000 objects larger than 128 KiB. The
   runbook cannot see object counts (control plane only); approve with your own inventory or metrics.
@@ -91,7 +91,7 @@ Raw subscription, tenant, principal and job identifiers and live account names a
 
 ## Prerequisites and first deployment
 
-Use **Bash** on Linux, WSL, or Azure Cloud Shell (Bash), with Git, jq, Python 3 and Azure CLI **2.87.0+**,
+Use **Bash** on Linux, WSL, or Azure Cloud Shell (Bash), with Git, curl, jq, Python 3 and Azure CLI **2.87.0+**,
 the `automation` extension, and Bicep. The guide includes installation checks, login, explicit subscription
 selection, region/name choices and a private evidence directory. Local PowerShell **7.4** is needed only
 for the offline PowerShell tests. Azure uses a PowerShell 7.4 runtime with **Az 12.3.0** pinned; review any

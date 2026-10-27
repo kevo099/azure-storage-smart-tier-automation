@@ -18,7 +18,7 @@ umask 077
 
 ## 0. Tools, source, login, and scope
 
-Install [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) **2.87.0 or newer**, Git, jq,
+Install [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) **2.87.0 or newer**, Git, curl, jq,
 Python 3, and standard Bash tools (`diff`, `sed`, `sha256sum`). The current Automation extension needs CLI
 2.75.0 or newer; this guide uses the higher [Smart tier tooling minimum](https://learn.microsoft.com/azure/storage/blobs/access-tiers-smart#client-tooling).
 The local review used CLI 2.90.0 and Automation extension 1.0.0b2. PowerShell **7.4** is needed locally only
@@ -31,6 +31,7 @@ az extension show --name automation --query version -o tsv
 az bicep install
 az bicep version
 git --version
+curl --version
 jq --version
 python3 --version
 ```
@@ -39,14 +40,15 @@ python3 --version
 agree whether to replace it in this CLI environment or use an isolated installation before proceeding;
 do not treat an already-installed message as proof that the requested pin is active.
 
-Clone the full source revision containing the deployment templates and corrected role helper. **Do not
-check out only `v1.1.0`**: that release contains the runbook but predates `automation-account.bicep` and the
+Clone the full source revision containing the deployment templates, corrected role helper and raw-byte
+publisher. **Do not check out only `v1.1.0`**: that release contains the runbook but predates
+`automation-account.bicep` and the
 helper scripts. The runbook imported by Azure remains separately pinned to the `v1.1.0` commit.
 
 ```bash
 git clone https://github.com/kevo099/azure-storage-smart-tier-automation.git
 cd azure-storage-smart-tier-automation
-SOURCE_COMMIT='c32ca158d077174bca862d7cfbfbfe6b8de07fc7'
+SOURCE_COMMIT='f631d08c3abfade79c83b32875a8a2988c711fd9'
 GUIDE_COPY=$(mktemp "${TMPDIR:-/tmp}/smart-tier-walkthrough.XXXXXX")
 cp docs/replicate-in-azure.md "$GUIDE_COPY"
 printf 'Keep this current walkthrough open: %s\n' "$GUIDE_COPY"
@@ -62,8 +64,11 @@ git diff --exit-code "$RUNBOOK_REF" -- src/Enable-AzStorageSmartTier.ps1
 
 **Checkpoint** — the source commit matches `SOURCE_COMMIT`; the diff prints nothing and exits zero. Keep
 the saved `GUIDE_COPY` (or this guide in your browser) open: the pinned source includes the executable
-files, while this walkthrough is newer. A fork must override Bicep's `sourceBaseUrl`; editing a local runbook does not change what the
-default remote import deploys.
+files, while a future walkthrough may be newer. This source pin includes the October 19 publisher repair;
+the older `c32ca158…` source uses text-normalizing upload/readback and cannot establish the byte-exact
+checkpoint below on affected CLI versions. The runbook release and expected hash are unchanged.
+A fork must override Bicep's `sourceBaseUrl`; editing a local runbook does not change what the default
+remote import deploys.
 
 Use the **commit pointed to by the release tag** for `RUNBOOK_REF`. For an annotated tag, `git rev-parse
 v1.1.0` returns a tag-object ID; `git rev-parse 'v1.1.0^{commit}'` returns the commit needed by GitHub's raw
@@ -174,7 +179,7 @@ that difference, not arbitrary whitespace or other source changes:
 ```bash
 git show "$RUNBOOK_REF:src/Enable-AzStorageSmartTier.ps1" > "$EVIDENCE_DIR/release.ps1"
 az rest --method get --url "$BASE/runbooks/Enable-AzStorageSmartTier/content?api-version=2023-11-01" \
-  -o tsv | tr -d '\r' > "$EVIDENCE_DIR/published.ps1"
+  --output-file "$EVIDENCE_DIR/published.ps1"
 python3 - "$EVIDENCE_DIR/release.ps1" "$EVIDENCE_DIR/published.ps1" <<'PY'
 from pathlib import Path
 import sys
