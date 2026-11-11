@@ -11,6 +11,12 @@ Runbook bytes are unchanged (`src/Enable-AzStorageSmartTier.ps1`, SHA-256 `ba11f
   2026-10-19). It also discovers the Automation Account region instead of defaulting to `eastus2`.
 - **Tests.** `tests/test_publish_runbook.py` (mocked Azure CLI) covers byte preservation and the upload gates; CI runs it.
 - **Evidence.** [LIVE-TEST-2026-10-19](docs/LIVE-TEST-2026-10-19.md): the full walkthrough in a second tenant.
+- **Documentation.** Smart tier availability corrected. Microsoft now lists it as generally available in
+  zone-redundant regions of the public cloud, Azure Government and 21Vianet, and available by default
+  (documentation read 2026-11-11). The README, design notes and gotchas no longer describe the two sovereign
+  clouds as previews. The cloud gate is unchanged: writes outside public Azure still need
+  `AllowNonPublicCloud=true`, and the runbook's `UnsupportedCloud` message keeps the older preview wording until
+  the next runbook release.
 
 Earlier changes on `main` after the v1.1.0 tag: the Automation Account Bicep, publish and ring-role helpers,
 the step-by-step walkthrough, the verified writer revocation fix and the 2026-09-06 live records.

@@ -45,8 +45,12 @@ Recommended combination: Policy `AuditIfNotExists` for visibility, this runbook 
   smart tier later. Approve with your own inventory or Azure Monitor metrics.
 - Eligibility follows Microsoft's prerequisites (StorageV2 + ZRS/GZRS/RA-GZRS, `Succeeded`). It does not
   detect redundancy conversions in progress beyond `provisioningState`, and it does not check region-level
-  availability — public cloud is GA; Azure Government and 21Vianet are documented previews (feature registration
-  required) that fail closed for writes unless explicitly allowed; other environments are refused.
+  availability. Microsoft lists smart tier as generally available in zone-redundant regions of the public cloud,
+  Azure Government and 21Vianet, and available by default (documentation read 2026-11-11). This project recorded
+  the two sovereign clouds as documented previews needing feature registration when 1.1.0 was written. The
+  runbook still fails closed for writes there unless explicitly allowed, because it has not been run live there;
+  other environments are refused. Its `UnsupportedCloud` message keeps the older preview wording until the next
+  runbook release.
 - No conditional update exists for storage accounts, so the opt-in check and the PATCH are not atomic:
   a tag removed in the milliseconds between the fresh read and the write does not stop the write. Serialise
   runs against a scope; do not run two writers.

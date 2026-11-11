@@ -46,8 +46,10 @@ Read it before the first `Remediate`.
 - The platform can restart an interrupted job from the beginning. Writes stay idempotent, but rows from the
   first attempt remain in the stream — trust the last `SUMMARY`.
 - Text `true`/`false` job parameters bind to `[bool]` correctly (proved live); `1`/`0` were not tested.
-- Sovereign clouds: only Azure Government and 21Vianet, as documented previews with feature registration,
-  and only with `AllowNonPublicCloud=true`; any other environment is refused for writes.
+- Sovereign clouds: only Azure Government and 21Vianet, and only with `AllowNonPublicCloud=true`; any other
+  environment is refused for writes. Microsoft now lists smart tier as generally available in both and
+  available by default (documentation read 2026-11-11), but the runbook has not been run live there, and its
+  refusal message still calls them previews that need feature registration.
 
 ## RBAC
 - `Microsoft.Storage/storageAccounts/write` is full account-update authority (network rules, TLS, shared
