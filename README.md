@@ -38,7 +38,10 @@ transition, early-deletion or retrieval charges inside smart tier. Two things an
   automatic move happens 30 days after enablement; redundancy can no longer be converted to LRS/GRS.
 
 Prerequisites Azure enforces: Standard general-purpose v2 accounts with ZRS, GZRS or RA-GZRS; block blobs
-only. Generally available in public-cloud regions; preview in Azure Government and 21Vianet.
+only. Microsoft lists smart tier as generally available in every zone-redundant region of the Azure public
+cloud, Azure Government and 21Vianet, and available by default on supported accounts
+([documentation](https://learn.microsoft.com/azure/storage/blobs/access-tiers-smart), read 2026-11-11). The
+live tests recorded in this repository ran in public Azure only.
 
 ## What the runbook does
 
@@ -56,7 +59,8 @@ preflight guards pass: no discovery errors, candidates ≤ `MaxChanges` (default
 `ExpectedChanges` when set, opt-in enforced unless `AllowUntaggedRemediation` is set, the named account
 eligible (a target that is neither `WouldRemediate` nor `AlreadySmart` aborts with `TargetNotEligible`; an
 already-Smart target is the idempotent success), and public cloud unless `AllowNonPublicCloud` (honoured
-only for the documented Azure Government / 21Vianet previews, which need feature registration).
+only for Azure Government and 21Vianet; it stays an explicit opt-in because the runbook has not been run
+live there).
 
 Every write outcome is reported honestly: `Remediated` (verified), `BlockedScopeLock`,
 `SkippedPreconditionChanged`, `Deferred` (a transient conflict — try the next run), `Failed`
@@ -159,7 +163,7 @@ command, region parameter and source-content checkpoint.
 | `MaxChanges` | `1` | Preflight abort before the first write if more accounts would change (a named target yields at most one) |
 | `ExpectedChanges` | `0` | Optional assertion (0 or 1 with a named target): if set and the account would change, the candidate count must equal it; an already-Smart target is not a mismatch |
 | `JobTimeBudgetSeconds` | `8400` | No new write starts after this; the job fails closed with the remainder reported |
-| `AllowNonPublicCloud` | `false` | Required to remediate outside public Azure; honoured only for Azure Government and 21Vianet (documented previews, feature registration required) — other environments are refused |
+| `AllowNonPublicCloud` | `false` | Required to remediate outside public Azure; honoured only for Azure Government and 21Vianet — other environments are refused. Microsoft now lists smart tier as generally available in both; the runbook has not been run live there, and its `UnsupportedCloud` message still calls them previews (runbook bytes unchanged) |
 
 ## Run audit first, then one account
 
